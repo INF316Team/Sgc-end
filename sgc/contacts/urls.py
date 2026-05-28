@@ -20,6 +20,7 @@ urlpatterns = [
 
     # Actions rapides
     path('<int:pk>/favorite/', views.toggle_favorite, name='toggle_favorite'),
+    path('import/csv/', views.import_csv, name='import_csv'),
 
     # Groupes
     path('groups/',               views.group_list,   name='groups'),

@@ -5,6 +5,7 @@
 
 
 import csv
+import io
 import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -285,8 +286,8 @@ def export_csv(request):
 
     # En-têtes
     writer.writerow([
-        'Prénom', 'Nom', 'Email', 'Téléphone',
-        'Entreprise', 'Adresse', 'Groupes', 'Favori', 'Notes', 'Créé le'
+        ' Prénom ', ' Nom ', ' Email ', ' Téléphone ',
+        ' Entreprise ', ' Adresse ', ' Groupes ', ' Favori ', ' Notes ', ' Créé le '
     ])
 
     # Données
@@ -435,3 +436,132 @@ def import_csv(request):
         form = CSVImportForm()
 
     return render(request, 'contacts/import_csv.html', {'form': form})
+
+@login_required
+def import_csv(request):
+    """Import de contacts depuis un fichier CSV."""
+
+    if request.method == 'POST':
+        form = CSVImportForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            fichier = request.FILES['fichier_csv']
+
+            # Vérifier l'extension
+            if not fichier.name.endswith('.csv'):
+                messages.error(request, "Le fichier doit être au format .csv")
+                return render(request, 'contacts/import_csv.html', {'form': form})
+
+            # Vérifier la taille (max 5 MB)
+            if fichier.size > 5 * 1024 * 1024:
+                messages.error(request, "Le fichier ne doit pas dépasser 5 MB.")
+                return render(request, 'contacts/import_csv.html', {'form': form})
+
+            # Lire avec gestion des encodages UTF-8 et Windows-1252
+            try:
+                contenu = fichier.read()
+                try:
+                    texte = contenu.decode('utf-8-sig')
+                except UnicodeDecodeError:
+                    texte = contenu.decode('windows-1252')
+            except Exception:
+                messages.error(request, "Impossible de lire le fichier.")
+                return render(request, 'contacts/import_csv.html', {'form': form})
+
+            # Détecter le séparateur (; ou ,)
+            reader = csv.DictReader(io.StringIO(texte), delimiter=';')
+            if reader.fieldnames is None or len(reader.fieldnames) <= 1:
+                reader = csv.DictReader(io.StringIO(texte), delimiter=',')
+
+            def normaliser(cle):
+                if cle is None:
+                    return ''
+                return cle.strip().lower().replace(' ', '_')
+
+            crees = ignores = erreurs = 0
+            doublons = []
+
+            for numero_ligne, ligne in enumerate(reader, start=2):
+                ligne_norm = {normaliser(k): (v.strip() if v else '')
+                              for k, v in ligne.items()}
+
+                prenom = (ligne_norm.get('prenom') or
+                          ligne_norm.get('prénom') or
+                          ligne_norm.get('firstname') or '')
+
+                nom    = (ligne_norm.get('nom') or
+                          ligne_norm.get('lastname') or '')
+
+                email  = (ligne_norm.get('email') or
+                          ligne_norm.get('mail') or '')
+
+                telephone  = (ligne_norm.get('telephone') or
+                              ligne_norm.get('téléphone') or
+                              ligne_norm.get('phone') or '')
+
+                entreprise = (ligne_norm.get('entreprise') or
+                              ligne_norm.get('company') or '')
+
+                adresse    = (ligne_norm.get('adresse') or
+                              ligne_norm.get('address') or '')
+
+                notes      = (ligne_norm.get('notes') or '')
+
+                # Ignorer les lignes sans prénom ni nom
+                if not prenom and not nom:
+                    ignores += 1
+                    continue
+
+                # Détecter les doublons par email (US9)
+                if email:
+                    if Contact.objects.filter(
+                        user=request.user,
+                        email__iexact=email
+                    ).exists():
+                        doublons.append({
+                            'ligne': numero_ligne,
+                            'nom': f"{prenom} {nom}".strip(),
+                            'email': email,
+                        })
+                        ignores += 1
+                        continue
+
+                # Créer le contact
+                try:
+                    Contact.objects.create(
+                        user=request.user,
+                        first_name=prenom,
+                        last_name=nom,
+                        email=email,
+                        phone=telephone,
+                        company=entreprise,
+                        address=adresse,
+                        notes=notes,
+                    )
+                    crees += 1
+                except Exception:
+                    erreurs += 1
+
+            # Message de résultat
+            if crees > 0:
+                messages.success(request,
+                    f"{crees} contact(s) importé(s). "
+                    f"{ignores} ignoré(s). {erreurs} erreur(s).")
+            else:
+                messages.warning(request,
+                    f"Aucun contact importé. "
+                    f"{ignores} ignoré(s), {erreurs} erreur(s).")
+
+            # Stocker les doublons en session pour les afficher (US9)
+            if doublons:
+                request.session['doublons_import'] = doublons
+
+            return redirect('contacts:list')
+
+    else:
+        form = CSVImportForm()
+
+    return render(request, 'contacts/import_csv.html', {'form': form})
+
+
+

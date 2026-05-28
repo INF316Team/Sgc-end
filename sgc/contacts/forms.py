@@ -84,3 +84,14 @@ class CSVImportForm(forms.Form):
         }),
         help_text="Colonnes attendues : prenom ; nom ; email ; telephone ; entreprise ; adresse ; notes"
     )
+
+class CSVImportForm(forms.Form):
+    """Formulaire d'import de fichier CSV."""
+    fichier_csv = forms.FileField(
+        label="Fichier CSV",
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv',
+        }),
+        help_text="Colonnes attendues : prenom ; nom ; email ; telephone ; entreprise ; adresse ; notes"
+    )

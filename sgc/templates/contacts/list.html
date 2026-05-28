@@ -8,9 +8,17 @@
     Contacts
     <span class="badge bg-primary ms-2">{{ total }}</span>
   </h4>
-  <a href="{% url 'contacts:create' %}" class="btn btn-primary">
-    <i class="bi bi-person-plus me-1"></i>Nouveau
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'contacts:import_csv' %}" class="btn btn-outline-primary">
+      <i class="bi bi-upload me-1"></i>Importer
+    </a>
+    <a href="{% url 'contacts:export_csv' %}" class="btn btn-outline-success">
+      <i class="bi bi-download me-1"></i>Exporter
+    </a>
+    <a href="{% url 'contacts:create' %}" class="btn btn-primary">
+      <i class="bi bi-person-plus me-1"></i>Nouveau
+    </a>
+  </div>
 </div>
 
 <!-- BARRE DE RECHERCHE -->
@@ -145,7 +153,6 @@
 
 {% block extra_js %}
 <script>
-// ── Toggle favori sans rechargement de page ──────────────────────────────
 document.querySelectorAll('.btn-star').forEach(btn => {
   btn.addEventListener('click', function() {
     const pk   = this.dataset.pk;
